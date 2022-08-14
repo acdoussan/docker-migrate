@@ -9,8 +9,18 @@ the container. The original container will be brought down as part of this proce
 started back up after the required snapshots have been taken. It is recommended that you validate
 the new container before destroying the old one.
 
+This is primarily intended to be used for a isolated container that has been manually created, or
+that has data on it that can't be migrated in another way. If you have a complicated setup, or
+have a way to recreated the container and its data without migrating it, this script if probably
+not for you.
+
 IF YOUR CONTAINER HAS VOLUMES: Volumes are assumed to be external, you will have to create them on
 the new host before running this script.
+
+# Requirements
+Docker must already be installed on both the local and remote host.
+
+If your host does not have internet access, `ubuntu:18.04` must be available on the local and remote host, and `stedolan/jq` must be available on the local host.
 
 # Usage
 
@@ -23,6 +33,8 @@ recommended that you set up an SSH keypair, otherwise you will have to enter the
 multiple times.
 
 # Podman
+
+NOTE: This is untested, but I have left it in based off of the docker-volumes.sh script
 
 To use [Podman](https://podman.io) instead of Docker, prepend `DOCKER=podman` to the command line to set the `DOCKER` environment variable.
 

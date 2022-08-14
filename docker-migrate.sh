@@ -10,6 +10,11 @@
 # started back up after the required snapshots have been taken. It is recommended that you validate
 # the new container before destroying the old one.
 #
+# This is primarily intended to be used for a isolated container that has been manually created, or
+# that has data on it that can't be migrated in another way. If you have a complicated setup, or
+# have a way to recreated the container and its data without migrating it, this script if probably
+# not for you.
+#
 # IF YOUR CONTAINER HAS VOLUMES: Volumes are assumed to be external, you will have to create them on
 # the new host before running this script.
 #
@@ -38,17 +43,24 @@ IMAGE="ubuntu:18.04"
 DOCKER=${DOCKER:-"docker"}
 
 migrate_container() {
+    echo "Local temp dir: $LOCAL_TMP"
+    echo "Remote temp dir: $REMOTE_TMP"
+
     # Stop the container
     echo "Stopping container $CONTAINER"
-    docker stop $CONTAINER
+    $DOCKER stop $CONTAINER
 
     # Create a new image
-    echo "Creating image for container $CONTAINER"
-    docker commit $CONTAINER $CONTAINER
+    $DOCKER inspect "$CONTAINER" > "$LOCAL_TMP/$CONTAINER.info"
+    IMAGE_NAME=$($DOCKER run -i stedolan/jq < "$LOCAL_TMP/$CONTAINER.info" -r '.[0].Config.Image')
+
+    echo "Creating image $IMAGE_NAME for container $CONTAINER"
+    echo "$DOCKER commit $CONTAINER $IMAGE_NAME"
+    $DOCKER commit $CONTAINER $IMAGE_NAME
 
     # Save and load image to another host
-    echo "Saving image and loading it onto remote host"
-    docker save $CONTAINER | ssh $USER@$HOST docker load
+    echo "Saving image and loading it onto remote host, this may take a while, be patient"
+    $DOCKER save $IMAGE_NAME | ssh $USER@$HOST $DOCKER load
 
     echo "Saving volumes"
     save_volumes
@@ -58,16 +70,16 @@ migrate_container() {
 
     # start container on local host
     echo "Restarting local container"
-    docker start "$CONTAINER"
+    $DOCKER start "$CONTAINER"
 
     # Copy volumes & compose to new host
     echo "Copying volumes and compose to remote host"
-    scp $TAR_FILE_NAME $USER@$HOST:/tmp
-    scp $CONTAINER.compose.yml $USER@$HOST:/tmp
+    scp $TAR_FILE_SRC $USER@$HOST:$TAR_FILE_DST
+    scp $COMPOSE_FILE_SRC $USER@$HOST:$COMPOSE_FILE_DST
 
     # Create container with the same options used in the previous container
     echo "Creating container on remote host"
-    ssh $USER@$HOST "docker compose -f /tmp/$CONTAINER.compose.yml create"
+    ssh $USER@$HOST "$DOCKER compose -f $COMPOSE_FILE_DST create"
 
     # Load the volumes
     echo "Loading volumes on remote host"
@@ -75,11 +87,13 @@ migrate_container() {
 
     # Start container on remote host
     echo "Staring remote container"
-    ssh $USER@$HOST "docker start $CONTAINER"
+    ssh $USER@$HOST "$DOCKER start $CONTAINER"
+
+    echo "$0 completed successfully"
 }
 
 save_container_options () {
-    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/red5d/docker-autocompose "$CONTAINER" > "$CONTAINER.compose.yml"
+    $DOCKER run --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/red5d/docker-autocompose "$CONTAINER" > "$COMPOSE_FILE_SRC"
 }
 
 get_volumes () {
@@ -106,9 +120,17 @@ load_volumes () {
 CONTAINER="$1"
 USER="$2"
 HOST="$3"
+
+LOCAL_TMP=$(mktemp -d)
+REMOTE_TMP=$(ssh $USER@$HOST "mktemp -d")
+
 TAR_FILE_NAME="$CONTAINER-volumes.tar.gz"
-TAR_FILE_SRC=$(readlink -f "$TAR_FILE_NAME")
-TAR_FILE_DST="/tmp/$TAR_FILE_NAME"
+TAR_FILE_SRC=$(readlink -f "$LOCAL_TMP/$TAR_FILE_NAME")
+TAR_FILE_DST="$REMOTE_TMP/$TAR_FILE_NAME"
+
+COMPOSE_FILE_NAME="$CONTAINER.compose.yml"
+COMPOSE_FILE_SRC="$LOCAL_TMP/$COMPOSE_FILE_NAME"
+COMPOSE_FILE_DST="$REMOTE_TMP/$COMPOSE_FILE_NAME"
 
 set -e
 migrate_container
