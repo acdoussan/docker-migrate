@@ -19,8 +19,12 @@ the new host before running this script.
 
 # Requirements
 Docker must already be installed on both the local and remote host.
+[Docker compose V2](https://stackoverflow.com/a/66516826) must be available on both hosts. You can verify that the
+V2 api is installed by running `docker compose version`.
 
-If your host does not have internet access, `ubuntu:18.04` must be available on the local and remote host, and `stedolan/jq` must be available on the local host.
+
+If your host does not have internet access, `ubuntu:18.04` must be available on the local and remote host, and
+`stedolan/jq` must be available on the local host. `red5d/docker-autocompose` must also be available on the local host.
 
 # Usage
 
@@ -36,7 +40,8 @@ multiple times.
 
 NOTE: This is untested, but I have left it in based off of the docker-volumes.sh script
 
-To use [Podman](https://podman.io) instead of Docker, prepend `DOCKER=podman` to the command line to set the `DOCKER` environment variable.
+To use [Podman](https://podman.io) instead of Docker, prepend `DOCKER=podman` to the command line to set the `DOCKER`
+environment variable.
 
 # Notes
 * This script could have been written in Python or Go, but the tarfile module and the tar package lack support for writing sparse files.
